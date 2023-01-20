@@ -2,7 +2,7 @@
 // @name         Decline-Google-Cookies
 // @namespace    http://tampermonkey.net/
 // @source       https://github.com/kakka0903/decline-google-cookies
-// @version      0.2
+// @version      0.3
 // @description  Auto-decline google consent cookies. More on github.
 // @author       Kasper J. Hopen Alfarnes
 // @match        https://consent.google.com/*
@@ -18,6 +18,14 @@
 (function () {
     "use strict";
 
+    function localeString (locale, toConvert) {
+        const strings = {de:{customise:"weiter", reject:"ablehnen"},
+                         en:{customise:"customi", reject:"reject"},
+                         it:{customise:"personaliz", reject:"rifiut"},
+                         es:{customise:"opcion", reject:"rechaz"}}; 
+         return strings[locale][toConvert];
+    }
+
     function isHidden (element) {
         /* check if elmement is hidden in the dom */
         return element.offsetParent === null;
@@ -25,109 +33,68 @@
 
     function isButton (element) {
         /* check if element is a button */
-        if (element.tagName == "BUTTON") {
-            return 1;
-        }
-        return 0;
+        return element.tagName == "BUTTON";
     }
 
-    function hasTextInChild (element, text, ignore_casing = true) {
-        var result = 0;
+    function hasTextInChild (element, text) {
+        var children = element.childNodes;
 
         // loop through all child elements
-        element.childNodes.forEach(child => {
-            var found_text = child.textContent;
+        for (var i = 0; i < children.length; i++) {
+            var found_text = children[i].textContent;
+            console.log('Decline-Google-Cookies: function hasTextInChild. found_text: '+found_text+', text: '+text)
 
-            // convert both to lowecase if ignor_casing
-            if (ignore_casing) {
-                found_text = found_text.toLowerCase();
-                text = text.toLowerCase();
-            }
+            found_text = found_text.toLowerCase();
+            text = text.toLowerCase();
 
             // check text
-            if (found_text == text) {
-                result = 1;
-            } else {
-                result = 0;
-            }
-        });
-
-        return result;
-    }
-
-    function isHeadingIncludingText (text, ignore_casing = true) {
-        /* Check if the page heading (H1 tag) contains given text */
-        var result = 0;
-        var all_headings = [...document.getElementsByTagName("H1")];
-
-        all_headings.forEach(element => {
-            var found = element.textContent;
-
-            // ignore casing
-            if (ignore_casing) {
-                text = text.toLowerCase();
-                found = found.toLowerCase();
-            }
-
-            // check if heading is not hidden and includes given text
-            if (!isHidden(element) && found.includes(text)) {
-                result = 1;
-            }
-        });
-
-        return result;
+            if (found_text.indexOf(text) >= 0)
+                return true;
+        }
+        return false;
     }
 
     function main () {
-        // get all buttons
-        var all_buttons = [...document.getElementsByTagName("BUTTON")];
+        var currentLocale = 'en';
+        var all_buttons = [...document.getElementsByTagName("button")];
 
-        // when page head ing says something like "before you continue to youtube"
-        if (isHeadingIncludingText("Before")) {
-            console.log("before!");
-            all_buttons.forEach(element => {
-                // click them if not hidden and says "Customize"
-                console.log(element.textContent);
-                console.log(hasTextInChild(element, "customize"));
+         // first find locale
+        for (var i = 0; i < all_buttons.length; i++) {
+          var element = all_buttons[i];
 
-                if (
-                    (!isHidden(element) &&
-                        hasTextInChild(element, "customise")) ||
-                    (!isHidden(element) && hasTextInChild(element, "customize"))
-                ) {
-                    console.log("found customize button");
-                    element.click();
-                }
-            });
+          var buttonText = element.textContent;
+          // console.log('Decline-Google-Cookies: buttonText is: '+buttonText);
+          if (buttonText.length < 2) {
+              all_buttons.splice(i, 1); 
+              break;
+          }
+          if (buttonText.length == 2 || buttonText == 'Deutsch' || buttonText == 'Italiano' || buttonText == 'Español') {
+              if (buttonText == 'Deutsch')
+                currentLocale = 'de';
+              else if (buttonText == 'Italiano')
+                 currentLocale = 'it';
+              else if (buttonText == 'Español')
+                 currentLocale = 'es';
+              else
+                currentLocale = buttonText;
+              console.log('Decline-Google-Cookies: locale is: '+currentLocale);
+              all_buttons.splice(i, 1); 
+              break;
+          }
         }
 
-        // when page heading says something like "Personalisation settings and cookies"
-        if (
-            isHeadingIncludingText("settings") &&
-            isHeadingIncludingText("cookies")
-        ) {
-            // click off buttons
-            all_buttons.forEach(element => {
-                // click them if not hidden and says "Off"
-                if (!isHidden(element) && hasTextInChild(element, "off")) {
-                    console.log("found off button");
-                    element.click();
-                }
-            });
-
-            // then, click confirm button
-            all_buttons.forEach(element => {
-                // click them if not hidden and says "Confirm"
-                if (!isHidden(element) && hasTextInChild(element, "confirm")) {
-                    console.log("found off button");
-                    element.click();
-                }
-            });
+        // then, click confirm button
+        for (var i = 0; i < all_buttons.length; i++) {
+          var element = all_buttons[i];
+          var buttonText = element.textContent;
+          // click them if not hidden and says "Reject"
+          if (!isHidden(element) && hasTextInChild(element, localeString(currentLocale, "reject")))
+            element.click();
         }
     }
 
     setTimeout(() => {
+        console.log("Decline-Google-Cookies: Running tampermonkey script");
         main();
-        console.log("Running tampermonkey script to decline google cookies");
-    }, 100);
+    }, 1000);
 })();
